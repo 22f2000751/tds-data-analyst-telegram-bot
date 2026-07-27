@@ -28,17 +28,27 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not TELEGRAM_BOT_TOKEN:
     raise ValueError(
-        "TELEGRAM_BOT_TOKEN not found in .env"
+        "TELEGRAM_BOT_TOKEN not found in environment variables"
     )
 
 if not GEMINI_API_KEY:
     raise ValueError(
-        "GEMINI_API_KEY not found in .env"
+        "GEMINI_API_KEY not found in environment variables"
     )
 
 
 # ==========================================================
-# 2. CONNECT TO GEMINI
+# 2. PUBLIC CLOUD RUN URL
+# ==========================================================
+
+PUBLIC_BASE_URL = (
+    "https://tds-data-analyst-bot-217834432048."
+    "europe-west1.run.app"
+)
+
+
+# ==========================================================
+# 3. CONNECT TO GEMINI
 # ==========================================================
 
 client = genai.Client(
@@ -47,14 +57,14 @@ client = genai.Client(
 
 
 # ==========================================================
-# 3. CONVERSATION MEMORY
+# 4. CONVERSATION MEMORY
 # ==========================================================
 
 conversation_history = {}
 
 
 # ==========================================================
-# 4. ASK GEMINI
+# 5. ASK GEMINI
 # ==========================================================
 
 def ask_gemini(conversation):
@@ -160,7 +170,7 @@ CONVERSATION:
 
 
 # ==========================================================
-# 5. HANDLE TELEGRAM MESSAGE
+# 6. HANDLE TELEGRAM MESSAGE
 # ==========================================================
 
 async def handle_message(
@@ -175,10 +185,15 @@ async def handle_message(
     chat_id = update.effective_chat.id
 
     # ------------------------------------------------------
-    # Generate a unique ID for THIS run
+    # Generate unique ID for this run
     # ------------------------------------------------------
 
     run_id = str(uuid.uuid4())
+
+    # Public log URL for this run
+    log_url = (
+        f"{PUBLIC_BASE_URL}/logs/{run_id}.jsonl"
+    )
 
     print()
     print("=" * 60)
@@ -313,24 +328,17 @@ async def handle_message(
         )
 
         # --------------------------------------------------
-        # Temporary log URL
-        #
-        # IMPORTANT:
-        # We will replace this in the deployment step.
-        # --------------------------------------------------
-
-        temporary_log_url = (
-            f"https://example.com/logs/{run_id}.jsonl"
-        )
-
-        # --------------------------------------------------
         # Build assignment response
         # --------------------------------------------------
 
         final_response = {
             "answer": answer,
-            "log_url": temporary_log_url
+            "log_url": log_url
         }
+
+        # --------------------------------------------------
+        # Convert to compact JSON
+        # --------------------------------------------------
 
         reply = json.dumps(
             final_response,
@@ -338,7 +346,10 @@ async def handle_message(
             ensure_ascii=False
         )
 
+        # --------------------------------------------------
         # Validate JSON
+        # --------------------------------------------------
+
         json.loads(reply)
 
         # Ensure exactly two outer keys
@@ -389,12 +400,15 @@ async def handle_message(
             }
         )
 
+        # --------------------------------------------------
+        # Build valid JSON error response
+        # --------------------------------------------------
+
         final_response = {
             "answer": {
                 "error": "Unable to process question"
             },
-            "log_url":
-                f"https://example.com/logs/{run_id}.jsonl"
+            "log_url": log_url
         }
 
         reply = json.dumps(
@@ -403,14 +417,22 @@ async def handle_message(
             ensure_ascii=False
         )
 
+        # --------------------------------------------------
+        # Log final error response
+        # --------------------------------------------------
+
         write_log(
             run_id,
             "final_response",
             final_response
         )
 
+        print()
+        print("Final error response:")
+        print(reply)
+
     # ------------------------------------------------------
-    # Send exactly one JSON object
+    # Send exactly one JSON object to Telegram
     # ------------------------------------------------------
 
     await update.message.reply_text(
@@ -419,14 +441,10 @@ async def handle_message(
 
 
 # ==========================================================
-# 6. START BOT
+# 7. CREATE TELEGRAM APPLICATION
 # ==========================================================
 
-def main():
-
-    print(
-        "Starting Ash Data Analyst bot..."
-    )
+def create_telegram_application():
 
     application = (
         Application
@@ -442,6 +460,21 @@ def main():
         )
     )
 
+    return application
+
+
+# ==========================================================
+# 8. START BOT LOCALLY
+# ==========================================================
+
+def main():
+
+    print(
+        "Starting Ash Data Analyst bot..."
+    )
+
+    application = create_telegram_application()
+
     print(
         "Bot is running. Press Ctrl+C to stop."
     )
@@ -450,7 +483,7 @@ def main():
 
 
 # ==========================================================
-# 7. RUN PROGRAM
+# 9. RUN PROGRAM
 # ==========================================================
 
 if __name__ == "__main__":
